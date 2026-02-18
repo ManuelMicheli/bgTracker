@@ -1,18 +1,56 @@
 import { Header } from '@/components/layout/header';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { TransactionList } from '@/components/transactions/transaction-list';
+import { AddTransactionForm } from '@/components/transactions/add-transaction-form';
+import * as transactionService from '@/lib/services/transaction.service';
+import * as categoryService from '@/lib/services/category.service';
 
-export default function TransactionsPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function TransactionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; type?: string; categoryId?: string }>;
+}) {
+  const params = await searchParams;
+  const page = parseInt(params.page ?? '1', 10);
+
+  const [result, categories] = await Promise.all([
+    transactionService.getTransactions({
+      page,
+      pageSize: 15,
+      type: params.type as 'expense' | 'income' | undefined,
+      categoryId: params.categoryId,
+    }),
+    categoryService.getAllCategories(),
+  ]);
+
+  const serialized = result.transactions.map((t) => ({
+    ...t,
+    date: t.date.toISOString(),
+    createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
+  }));
+
+  const plainCategories = categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    icon: c.icon,
+    type: c.type,
+  }));
+
   return (
     <>
       <Header title="Transazioni" />
-      <div className="p-6">
+      <div className="space-y-6 p-6">
+        <AddTransactionForm categories={plainCategories} />
         <Card>
-          <CardContent>
-            <p className="text-muted-foreground">
-              La lista delle transazioni e l&apos;importazione via Telegram Bot saranno disponibili
-              nella Fase 3.
-            </p>
-          </CardContent>
+          <TransactionList
+            transactions={serialized}
+            total={result.total}
+            page={result.page}
+            pageSize={result.pageSize}
+          />
         </Card>
       </div>
     </>
