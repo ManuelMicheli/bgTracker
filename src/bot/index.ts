@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard } from 'grammy';
 import { formatCurrency } from '@/lib/utils';
 import { logger } from '@/lib/logger';
+import { parseMessage } from './parser';
 import * as transactionService from '@/lib/services/transaction.service';
 import * as categoryService from '@/lib/services/category.service';
 
@@ -11,31 +12,38 @@ function createBot(token: string) {
   bot.command('start', async (ctx) => {
     await ctx.reply(
       '👋 Ciao! Sono il tuo assistente per le finanze.\n\n' +
-        '📝 *Come inserire una spesa:*\n' +
-        'Scrivi semplicemente importo e descrizione:\n' +
-        '`25 Pizza con amici`\n' +
-        '`85.50 Spesa settimanale`\n\n' +
-        '📝 *Come inserire un\'entrata:*\n' +
-        '`+ 1800 Stipendio`\n\n' +
-        '📊 *Comandi disponibili:*\n' +
-        '/saldo - Riepilogo mese corrente\n' +
-        '/ultimi - Ultime 5 transazioni\n' +
+        'Scrivimi come parleresti a un amico:\n\n' +
+        '💸 *Spese:*\n' +
+        '• "Ho speso 25 euro per la pizza"\n' +
+        '• "Pagato 85 di spesa al Lidl"\n' +
+        '• "Netflix 12.99"\n' +
+        '• "Benzina 45 euro"\n\n' +
+        '💰 *Entrate:*\n' +
+        '• "Mi sono arrivati 1800 di stipendio"\n' +
+        '• "Ricevuto bonifico 500 euro"\n\n' +
+        '📊 *Comandi:*\n' +
+        '/saldo - Riepilogo mese\n' +
+        '/ultimi - Ultime transazioni\n' +
         '/categorie - Lista categorie\n' +
-        '/help - Mostra questo messaggio',
+        '/annulla - Elimina ultima',
       { parse_mode: 'Markdown' },
     );
   });
 
   bot.command('help', async (ctx) => {
     await ctx.reply(
-      '📝 *Inserimento rapido:*\n' +
-        '`25 Pizza` → Spesa di €25\n' +
-        '`+ 1800 Stipendio` → Entrata di €1.800\n\n' +
+      '📝 *Scrivimi in modo naturale!*\n\n' +
+        'Capisco frasi come:\n' +
+        '• "Ho speso 25 euro per la pizza con amici"\n' +
+        '• "Pagato bolletta luce 62 euro"\n' +
+        '• "Caffè 1.50"\n' +
+        '• "Mi è arrivato lo stipendio 1800"\n\n' +
+        'Capisco la categoria automaticamente, e se sbaglio puoi correggerla con un tap.\n\n' +
         '📊 *Comandi:*\n' +
         '/saldo - Riepilogo mensile\n' +
         '/ultimi - Ultime transazioni\n' +
         '/categorie - Lista categorie\n' +
-        '/annulla - Annulla ultima transazione',
+        '/annulla - Elimina ultima transazione',
       { parse_mode: 'Markdown' },
     );
   });
@@ -48,9 +56,10 @@ function createBot(token: string) {
 
       const diff = currentMonth.expenses - previousMonth.expenses;
       const diffSign = diff > 0 ? '📈 +' : '📉 ';
-      const diffText = previousMonth.expenses > 0
-        ? `\n${diffSign}${formatCurrency(Math.abs(diff))} vs mese scorso`
-        : '';
+      const diffText =
+        previousMonth.expenses > 0
+          ? `\n${diffSign}${formatCurrency(Math.abs(diff))} vs mese scorso`
+          : '';
 
       await ctx.reply(
         `💰 *Riepilogo ${new Date().toLocaleString('it-IT', { month: 'long', year: 'numeric' })}*\n\n` +
@@ -108,7 +117,7 @@ function createBot(token: string) {
     }
   });
 
-  // /annulla - delete last transaction
+  // /annulla
   bot.command('annulla', async (ctx) => {
     try {
       const recent = await transactionService.getRecentTransactions(1);
@@ -121,10 +130,10 @@ function createBot(token: string) {
       const sign = last.type === 'income' ? '+' : '-';
       const keyboard = new InlineKeyboard()
         .text('✅ Conferma', `delete:${last.id}`)
-        .text('❌ Annulla', 'cancel');
+        .text('❌ No', 'cancel');
 
       await ctx.reply(
-        `🗑️ Vuoi eliminare l'ultima transazione?\n\n` +
+        `🗑️ Elimino l'ultima transazione?\n\n` +
           `${last.category.icon} ${sign}${formatCurrency(last.amount)} ${last.description}`,
         { reply_markup: keyboard },
       );
@@ -143,7 +152,7 @@ function createBot(token: string) {
       await ctx.answerCallbackQuery();
     } catch (error) {
       logger.error('Bot delete callback error', { error: String(error) });
-      await ctx.answerCallbackQuery({ text: '❌ Errore nell\'eliminazione' });
+      await ctx.answerCallbackQuery({ text: '❌ Errore' });
     }
   });
 
@@ -153,13 +162,12 @@ function createBot(token: string) {
     await ctx.answerCallbackQuery();
   });
 
-  // Callback: category selection for pending transaction
-  bot.callbackQuery(/^cat:(.+):(.+):(.+)$/, async (ctx) => {
+  // Callback: confirm suggested category (save immediately)
+  bot.callbackQuery(/^save:(.+):(.+):(.+)$/, async (ctx) => {
     try {
       const [, amountStr, categoryId, type] = ctx.match;
       const amount = parseFloat(amountStr);
 
-      // Get description from the original message
       const originalText = ctx.callbackQuery.message?.text ?? '';
       const descMatch = originalText.match(/📝 (.+)\n/);
       const description = descMatch?.[1] ?? 'Transazione';
@@ -174,57 +182,102 @@ function createBot(token: string) {
 
       const sign = type === 'income' ? '+' : '-';
       await ctx.editMessageText(
-        `✅ Registrato!\n\n` +
+        `✅ Salvato!\n\n` +
           `${transaction.category.icon} ${sign}${formatCurrency(amount)} ${description}`,
       );
       await ctx.answerCallbackQuery();
     } catch (error) {
-      logger.error('Bot category callback error', { error: String(error) });
+      logger.error('Bot save callback error', { error: String(error) });
       await ctx.answerCallbackQuery({ text: '❌ Errore nel salvataggio' });
     }
   });
 
-  // Text messages: quick expense/income entry
+  // Callback: show all categories (when suggested was wrong)
+  bot.callbackQuery(/^other:(.+):(.+)$/, async (ctx) => {
+    try {
+      const [, amountStr, type] = ctx.match;
+      const amount = parseFloat(amountStr);
+
+      const categories =
+        type === 'income'
+          ? await categoryService.getIncomeCategories()
+          : await categoryService.getExpenseCategories();
+
+      const keyboard = new InlineKeyboard();
+      categories.forEach((cat, i) => {
+        keyboard.text(
+          `${cat.icon} ${cat.name}`,
+          `save:${amount}:${cat.id}:${type}`,
+        );
+        if ((i + 1) % 3 === 0) keyboard.row();
+      });
+
+      await ctx.editMessageReplyMarkup({ reply_markup: keyboard });
+      await ctx.answerCallbackQuery();
+    } catch (error) {
+      logger.error('Bot other callback error', { error: String(error) });
+      await ctx.answerCallbackQuery({ text: '❌ Errore' });
+    }
+  });
+
+  // Natural language text messages
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text.trim();
-
-    // Skip commands
     if (text.startsWith('/')) return;
 
-    // Parse: "+ 1800 Stipendio" for income, "25 Pizza" for expense
-    const incomeMatch = text.match(/^\+\s*(\d+(?:[.,]\d{1,2})?)\s+(.+)$/);
-    const expenseMatch = text.match(/^(\d+(?:[.,]\d{1,2})?)\s+(.+)$/);
+    const parsed = parseMessage(text);
 
-    const match = incomeMatch ?? expenseMatch;
-    if (!match) {
+    if (!parsed) {
       await ctx.reply(
-        '❓ Formato non riconosciuto.\n\nUsa: `25 Pizza` per una spesa o `+ 1800 Stipendio` per un\'entrata.',
-        { parse_mode: 'Markdown' },
+        '🤔 Non ho capito. Prova a scrivere qualcosa come:\n\n' +
+          '• "Ho speso 25 euro per la pizza"\n' +
+          '• "Benzina 45"\n' +
+          '• "Stipendio 1800 euro"',
       );
       return;
     }
 
-    const isIncome = !!incomeMatch;
-    const amount = parseFloat(match[1].replace(',', '.'));
-    const description = match[2].trim();
-    const type = isIncome ? 'income' : 'expense';
-
     try {
-      // Get categories for inline keyboard
-      const categories = isIncome
-        ? await categoryService.getIncomeCategories()
-        : await categoryService.getExpenseCategories();
+      const categories =
+        parsed.type === 'income'
+          ? await categoryService.getIncomeCategories()
+          : await categoryService.getExpenseCategories();
+
+      const sign = parsed.type === 'income' ? '+' : '-';
+
+      // If we have a suggested category, offer quick confirm
+      const suggestedCat = parsed.suggestedCategory
+        ? categories.find((c) => c.name === parsed.suggestedCategory)
+        : null;
 
       const keyboard = new InlineKeyboard();
-      categories.forEach((cat, i) => {
-        keyboard.text(`${cat.icon} ${cat.name}`, `cat:${amount}:${cat.id}:${type}`);
-        if ((i + 1) % 3 === 0) keyboard.row();
-      });
 
-      const sign = isIncome ? '+' : '-';
+      if (suggestedCat) {
+        // First row: confirm suggested category (big green button feel)
+        keyboard
+          .text(
+            `✅ ${suggestedCat.icon} ${suggestedCat.name}`,
+            `save:${parsed.amount}:${suggestedCat.id}:${parsed.type}`,
+          )
+          .text('📂 Altra', `other:${parsed.amount}:${parsed.type}`);
+      } else {
+        // No suggestion: show all categories
+        categories.forEach((cat, i) => {
+          keyboard.text(
+            `${cat.icon} ${cat.name}`,
+            `save:${parsed.amount}:${cat.id}:${parsed.type}`,
+          );
+          if ((i + 1) % 3 === 0) keyboard.row();
+        });
+      }
+
+      const suggestionHint = suggestedCat
+        ? `\n💡 Ho capito: *${suggestedCat.name}*. Giusto?`
+        : '\n\nScegli la categoria:';
+
       await ctx.reply(
-        `${sign}${formatCurrency(amount)}\n📝 ${description}\n\nScegli la categoria:`,
-        { reply_markup: keyboard },
+        `${sign}${formatCurrency(parsed.amount)}\n📝 ${parsed.description}${suggestionHint}`,
+        { reply_markup: keyboard, parse_mode: 'Markdown' },
       );
     } catch (error) {
       logger.error('Bot text handler error', { error: String(error) });
