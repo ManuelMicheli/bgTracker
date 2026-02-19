@@ -37,16 +37,18 @@ export function ResetData() {
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-danger/30 bg-danger/5 p-4">
-      <p className="flex-1 text-sm font-medium">
+    <div className="space-y-3 rounded-lg border border-danger/30 bg-danger/5 p-4">
+      <p className="text-sm font-medium">
         Sei sicuro? Tutte le transazioni verranno eliminate. Azione irreversibile.
       </p>
-      <Button variant="danger" onClick={handleReset} disabled={deleting}>
-        {deleting ? 'Eliminazione...' : 'Conferma'}
-      </Button>
-      <Button variant="ghost" onClick={() => setConfirming(false)}>
-        Annulla
-      </Button>
+      <div className="flex gap-2">
+        <Button variant="danger" size="sm" onClick={handleReset} disabled={deleting}>
+          {deleting ? 'Eliminazione...' : 'Conferma'}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+          Annulla
+        </Button>
+      </div>
     </div>
   );
 }

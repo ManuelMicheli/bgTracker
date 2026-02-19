@@ -72,77 +72,85 @@ export function CategoryList({ categories }: { categories: Category[] }) {
 
   function renderCategory(cat: Category) {
     const isEditing = editing === cat.id;
+    const hasTransactions = cat._count.transactions > 0;
 
-    return (
-      <div
-        key={cat.id}
-        className="flex items-center justify-between rounded-lg border border-border px-4 py-3"
-      >
-        {isEditing ? (
-          <div className="flex flex-1 items-center gap-2">
+    if (isEditing) {
+      return (
+        <div
+          key={cat.id}
+          className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3"
+        >
+          <div className="flex items-center gap-2">
             <input
               type="text"
               value={editValues.icon}
               onChange={(e) => setEditValues({ ...editValues, icon: e.target.value })}
-              className="w-12 rounded border border-border bg-background px-2 py-1 text-center text-lg"
+              className="w-12 rounded border border-border bg-background px-2 py-1.5 text-center text-lg"
               maxLength={4}
             />
             <input
               type="text"
               value={editValues.name}
               onChange={(e) => setEditValues({ ...editValues, name: e.target.value })}
-              className="flex-1 rounded border border-border bg-background px-2 py-1 text-sm"
+              className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 text-sm"
             />
             <input
               type="color"
               value={editValues.color}
               onChange={(e) => setEditValues({ ...editValues, color: e.target.value })}
-              className="h-8 w-8 cursor-pointer rounded border-none"
+              className="h-8 w-8 shrink-0 cursor-pointer rounded border-none"
             />
           </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <span
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-lg"
-              style={{ backgroundColor: cat.color + '20' }}
-            >
-              {cat.icon}
-            </span>
-            <span className="font-medium">{cat.name}</span>
-            <Badge>{cat._count.transactions} transazioni</Badge>
+          <div className="flex gap-2">
+            <Button size="sm" variant="primary" onClick={() => handleSaveEdit(cat.id)}>
+              Salva
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+              Annulla
+            </Button>
           </div>
-        )}
+        </div>
+      );
+    }
 
-        <div className="flex items-center gap-1">
-          {isEditing ? (
-            <>
-              <Button size="sm" variant="primary" onClick={() => handleSaveEdit(cat.id)}>
-                Salva
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-                Annulla
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button size="sm" variant="ghost" onClick={() => startEdit(cat)}>
-                Modifica
-              </Button>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => handleDelete(cat.id)}
-                disabled={deleting === cat.id || cat._count.transactions > 0}
-                title={
-                  cat._count.transactions > 0
-                    ? 'Non puoi eliminare una categoria con transazioni'
-                    : undefined
-                }
-              >
-                {deleting === cat.id ? '...' : 'Elimina'}
-              </Button>
-            </>
-          )}
+    return (
+      <div
+        key={cat.id}
+        className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5"
+      >
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-lg"
+          style={{ backgroundColor: cat.color + '20' }}
+        >
+          {cat.icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{cat.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {cat._count.transactions} transazioni
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            onClick={() => startEdit(cat)}
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Modifica"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+          </button>
+          <button
+            onClick={() => handleDelete(cat.id)}
+            disabled={deleting === cat.id || hasTransactions}
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger disabled:pointer-events-none disabled:opacity-30"
+            aria-label="Elimina"
+            title={hasTransactions ? 'Non puoi eliminare una categoria con transazioni' : 'Elimina'}
+          >
+            {deleting === cat.id ? (
+              <span className="block h-4 w-4 text-center text-xs">...</span>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            )}
+          </button>
         </div>
       </div>
     );
