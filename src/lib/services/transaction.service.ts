@@ -85,6 +85,10 @@ export async function deleteTransaction(id: string) {
   return prisma.transaction.delete({ where: { id } });
 }
 
+export async function deleteAllTransactions() {
+  return prisma.transaction.deleteMany();
+}
+
 export async function getMonthlyStats(date: Date = new Date()) {
   const monthStart = startOfMonth(date);
   const monthEnd = endOfMonth(date);

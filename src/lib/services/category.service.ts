@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import type { CreateCategoryInput } from '@/lib/validators/category';
+import type { CreateCategoryInput, UpdateCategoryInput } from '@/lib/validators/category';
 
 export async function getAllCategories() {
   return prisma.category.findMany({
@@ -40,5 +40,24 @@ export async function createCategory(data: CreateCategoryInput) {
       color: data.color ?? '#6b7280',
       type: data.type ?? 'expense',
     },
+  });
+}
+
+export async function updateCategory(id: string, data: UpdateCategoryInput) {
+  return prisma.category.update({
+    where: { id },
+    data,
+  });
+}
+
+export async function deleteCategory(id: string) {
+  return prisma.category.delete({
+    where: { id },
+  });
+}
+
+export async function getCategoryTransactionCount(id: string) {
+  return prisma.transaction.count({
+    where: { categoryId: id },
   });
 }

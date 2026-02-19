@@ -50,3 +50,9 @@ prisma/dev.db-journal
 
 # claude
 .claude/
+
+# ngrok wrapper
+ngrok.cmd
+
+.vercel
+.env*.local

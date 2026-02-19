@@ -1,20 +1,23 @@
+import "dotenv/config";
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 
-const adapter = new PrismaBetterSqlite3({ url: 'file:./dev.db' });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 const DEFAULT_CATEGORIES = [
-  { name: 'Spesa', icon: '🛒', color: '#22c55e', type: 'expense' },
-  { name: 'Trasporti', icon: '🚗', color: '#3b82f6', type: 'expense' },
   { name: 'Abbonamenti', icon: '📱', color: '#a855f7', type: 'expense' },
-  { name: 'Ristoranti', icon: '🍽️', color: '#f97316', type: 'expense' },
-  { name: 'Salute', icon: '💊', color: '#ef4444', type: 'expense' },
-  { name: 'Casa', icon: '🏠', color: '#eab308', type: 'expense' },
-  { name: 'Intrattenimento', icon: '🎬', color: '#ec4899', type: 'expense' },
+  { name: 'Cibo', icon: '🍽️', color: '#f97316', type: 'expense' },
+  { name: 'Za', icon: '🛍️', color: '#ec4899', type: 'expense' },
+  { name: 'Tabacchi', icon: '🚬', color: '#78716c', type: 'expense' },
+  { name: 'Casa e Macchina', icon: '🏠', color: '#eab308', type: 'expense' },
+  { name: 'Benzina', icon: '⛽', color: '#3b82f6', type: 'expense' },
   { name: 'Stipendio', icon: '💰', color: '#10b981', type: 'income' },
   { name: 'Altro', icon: '📦', color: '#6b7280', type: 'expense' },
 ];
+
 
 async function main() {
   console.log('Seeding database...');
@@ -56,4 +59,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await pool.end();
   });

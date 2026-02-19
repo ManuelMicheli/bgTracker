@@ -1,9 +1,15 @@
 import { Bot, InlineKeyboard } from 'grammy';
 import { formatCurrency } from '@/lib/utils';
 import { logger } from '@/lib/logger';
-import { parseMessage } from './parser';
+import { parseMessage, suggestCategory } from './parser';
+import { extractTransactionsFromPhoto } from './vision';
+import { extractTransactionsFromFile, SUPPORTED_EXTENSIONS } from './file-parser';
 import * as transactionService from '@/lib/services/transaction.service';
 import * as categoryService from '@/lib/services/category.service';
+
+// Store batch IDs in memory (Telegram callback data has 64 byte limit)
+const batchStore = new Map<string, string[]>();
+let batchCounter = 0;
 
 function createBot(token: string) {
   const bot = new Bot(token);
@@ -143,6 +149,30 @@ function createBot(token: string) {
     }
   });
 
+  // /azzera
+  bot.command('azzera', async (ctx) => {
+    const keyboard = new InlineKeyboard()
+      .text('✅ Sì, cancella tutto', 'confirm-reset')
+      .text('❌ No', 'cancel');
+
+    await ctx.reply(
+      '⚠️ Vuoi davvero eliminare TUTTE le transazioni? Questa azione è irreversibile.',
+      { reply_markup: keyboard },
+    );
+  });
+
+  // Callback: confirm reset
+  bot.callbackQuery('confirm-reset', async (ctx) => {
+    try {
+      const result = await transactionService.deleteAllTransactions();
+      await ctx.editMessageText(`🗑️ Fatto. ${result.count} transazioni eliminate.`);
+      await ctx.answerCallbackQuery();
+    } catch (error) {
+      logger.error('Bot reset error', { error: String(error) });
+      await ctx.answerCallbackQuery({ text: '❌ Errore' });
+    }
+  });
+
   // Callback: delete confirmation
   bot.callbackQuery(/^delete:(.+)$/, async (ctx) => {
     try {
@@ -162,15 +192,15 @@ function createBot(token: string) {
     await ctx.answerCallbackQuery();
   });
 
-  // Callback: confirm suggested category (save immediately)
+  // Callback: user picks category manually
   bot.callbackQuery(/^save:(.+):(.+):(.+)$/, async (ctx) => {
     try {
       const [, amountStr, categoryId, type] = ctx.match;
       const amount = parseFloat(amountStr);
 
-      const originalText = ctx.callbackQuery.message?.text ?? '';
-      const descMatch = originalText.match(/📝 (.+)\n/);
-      const description = descMatch?.[1] ?? 'Transazione';
+      // Get category name to use as description
+      const category = await categoryService.getCategoryById(categoryId);
+      const description = category?.name ?? 'Transazione';
 
       const transaction = await transactionService.createTransaction({
         amount,
@@ -182,8 +212,7 @@ function createBot(token: string) {
 
       const sign = type === 'income' ? '+' : '-';
       await ctx.editMessageText(
-        `✅ Salvato!\n\n` +
-          `${transaction.category.icon} ${sign}${formatCurrency(amount)} ${description}`,
+        `✅ ${transaction.category.icon} ${sign}${formatCurrency(amount)} — ${description}`,
       );
       await ctx.answerCallbackQuery();
     } catch (error) {
@@ -220,6 +249,196 @@ function createBot(token: string) {
     }
   });
 
+  // Callback: batch delete (annulla tutte le transazioni da foto)
+  bot.callbackQuery(/^batch-del:(.+)$/, async (ctx) => {
+    try {
+      const batchId = ctx.match[1];
+      const ids = batchStore.get(batchId);
+      if (!ids || ids.length === 0) {
+        await ctx.editMessageText('⚠️ Batch non trovato o già eliminato.');
+        await ctx.answerCallbackQuery();
+        return;
+      }
+      for (const id of ids) {
+        await transactionService.deleteTransaction(id);
+      }
+      batchStore.delete(batchId);
+      await ctx.editMessageText(`🗑️ ${ids.length} transazioni eliminate.`);
+      await ctx.answerCallbackQuery();
+    } catch (error) {
+      logger.error('Bot batch-delete error', { error: String(error) });
+      await ctx.answerCallbackQuery({ text: '❌ Errore' });
+    }
+  });
+
+  // Photo messages: extract transactions via AI vision
+  bot.on('message:photo', async (ctx) => {
+    if (!process.env.OPENAI_API_KEY) {
+      await ctx.reply('❌ OPENAI_API_KEY non configurata. Aggiungi la chiave nel file .env');
+      return;
+    }
+
+    const processing = await ctx.reply('🔍 Sto analizzando la foto...');
+
+    try {
+      // Get highest resolution photo
+      const photos = ctx.message.photo;
+      const photo = photos[photos.length - 1];
+      const file = await ctx.api.getFile(photo.file_id);
+      const fileUrl = `https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`;
+
+      // Download and convert to base64
+      const response = await fetch(fileUrl);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const base64 = buffer.toString('base64');
+
+      // Extract transactions via OpenAI Vision
+      const extracted = await extractTransactionsFromPhoto(base64);
+
+      if (extracted.length === 0) {
+        await ctx.api.editMessageText(
+          ctx.chat.id,
+          processing.message_id,
+          '🤔 Non ho trovato transazioni nella foto. Prova con un\'immagine più chiara.',
+        );
+        return;
+      }
+
+      // Get all categories for matching
+      const allCategories = await categoryService.getAllCategories();
+      const savedIds: string[] = [];
+      const lines: string[] = [];
+
+      for (const item of extracted) {
+        const categoryName = suggestCategory(item.description, item.type);
+        const matchedCat = categoryName
+          ? allCategories.find((c) => c.name === categoryName)
+          : allCategories.find((c) => c.name === 'Altro');
+        const cat = matchedCat ?? allCategories[0];
+
+        const transaction = await transactionService.createTransaction({
+          amount: item.amount,
+          description: cat.name,
+          type: item.type,
+          source: 'telegram',
+          categoryId: cat.id,
+        });
+
+        savedIds.push(transaction.id);
+        const sign = item.type === 'income' ? '+' : '-';
+        lines.push(`${cat.icon} ${sign}${formatCurrency(item.amount)} — ${cat.name}`);
+      }
+
+      const batchId = String(++batchCounter);
+      batchStore.set(batchId, savedIds);
+
+      const keyboard = new InlineKeyboard().text(
+        '🗑️ Annulla tutto',
+        `batch-del:${batchId}`,
+      );
+
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        processing.message_id,
+        `✅ Ho trovato e salvato ${extracted.length} transazioni:\n\n${lines.join('\n')}`,
+        { reply_markup: keyboard },
+      );
+    } catch (error) {
+      logger.error('Bot photo handler error', { error: String(error) });
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        processing.message_id,
+        '❌ Errore nell\'analisi della foto. Riprova.',
+      );
+    }
+  });
+
+  // Document messages: extract transactions from CSV, PDF, Excel
+  bot.on('message:document', async (ctx) => {
+    const doc = ctx.message.document;
+    const fileName = doc.file_name ?? 'file';
+    const ext = fileName.toLowerCase().split('.').pop() ?? '';
+
+    if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+      await ctx.reply(
+        `📄 Formato non supportato. Invia un file:\n• CSV\n• PDF\n• Excel (.xlsx, .xls)`,
+      );
+      return;
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      await ctx.reply('❌ OPENAI_API_KEY non configurata.');
+      return;
+    }
+
+    const processing = await ctx.reply(`🔍 Sto analizzando il file ${ext.toUpperCase()}...`);
+
+    try {
+      const file = await ctx.api.getFile(doc.file_id);
+      const fileUrl = `https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`;
+
+      const response = await fetch(fileUrl);
+      const buffer = Buffer.from(await response.arrayBuffer());
+
+      const extracted = await extractTransactionsFromFile(buffer, fileName);
+
+      if (extracted.length === 0) {
+        await ctx.api.editMessageText(
+          ctx.chat.id,
+          processing.message_id,
+          '🤔 Non ho trovato transazioni nel file. Verifica che contenga dati validi.',
+        );
+        return;
+      }
+
+      const allCategories = await categoryService.getAllCategories();
+      const savedIds: string[] = [];
+      const lines: string[] = [];
+
+      for (const item of extracted) {
+        const categoryName = suggestCategory(item.description, item.type);
+        const matchedCat = categoryName
+          ? allCategories.find((c) => c.name === categoryName)
+          : allCategories.find((c) => c.name === 'Altro');
+        const cat = matchedCat ?? allCategories[0];
+
+        const transaction = await transactionService.createTransaction({
+          amount: item.amount,
+          description: cat.name,
+          type: item.type,
+          source: 'telegram',
+          categoryId: cat.id,
+        });
+
+        savedIds.push(transaction.id);
+        const sign = item.type === 'income' ? '+' : '-';
+        lines.push(`${cat.icon} ${sign}${formatCurrency(item.amount)} — ${cat.name}`);
+      }
+
+      const batchId = String(++batchCounter);
+      batchStore.set(batchId, savedIds);
+
+      const keyboard = new InlineKeyboard().text(
+        '🗑️ Annulla tutto',
+        `batch-del:${batchId}`,
+      );
+
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        processing.message_id,
+        `✅ Ho trovato e salvato ${extracted.length} transazioni da ${ext.toUpperCase()}:\n\n${lines.join('\n')}`,
+        { reply_markup: keyboard },
+      );
+    } catch (error) {
+      logger.error('Bot document handler error', { error: String(error) });
+      await ctx.api.editMessageText(
+        ctx.chat.id,
+        processing.message_id,
+        '❌ Errore nell\'analisi del file. Riprova.',
+      );
+    }
+  });
+
   // Natural language text messages
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text.trim();
@@ -245,23 +464,31 @@ function createBot(token: string) {
 
       const sign = parsed.type === 'income' ? '+' : '-';
 
-      // If we have a suggested category, offer quick confirm
       const suggestedCat = parsed.suggestedCategory
         ? categories.find((c) => c.name === parsed.suggestedCategory)
         : null;
 
-      const keyboard = new InlineKeyboard();
-
       if (suggestedCat) {
-        // First row: confirm suggested category (big green button feel)
-        keyboard
-          .text(
-            `✅ ${suggestedCat.icon} ${suggestedCat.name}`,
-            `save:${parsed.amount}:${suggestedCat.id}:${parsed.type}`,
-          )
-          .text('📂 Altra', `other:${parsed.amount}:${parsed.type}`);
+        // Auto-save: category detected, use category name as description
+        const transaction = await transactionService.createTransaction({
+          amount: parsed.amount,
+          description: suggestedCat.name,
+          type: parsed.type,
+          source: 'telegram',
+          categoryId: suggestedCat.id,
+        });
+
+        const undoKeyboard = new InlineKeyboard()
+          .text('📂 Cambia', `other:${parsed.amount}:${parsed.type}`)
+          .text('🗑️ Annulla', `delete:${transaction.id}`);
+
+        await ctx.reply(
+          `✅ ${suggestedCat.icon} ${sign}${formatCurrency(parsed.amount)} — ${suggestedCat.name}`,
+          { reply_markup: undoKeyboard },
+        );
       } else {
-        // No suggestion: show all categories
+        // No confident match: ask user to pick category
+        const keyboard = new InlineKeyboard();
         categories.forEach((cat, i) => {
           keyboard.text(
             `${cat.icon} ${cat.name}`,
@@ -269,16 +496,12 @@ function createBot(token: string) {
           );
           if ((i + 1) % 3 === 0) keyboard.row();
         });
+
+        await ctx.reply(
+          `${sign}${formatCurrency(parsed.amount)}\n\nScegli la categoria:`,
+          { reply_markup: keyboard },
+        );
       }
-
-      const suggestionHint = suggestedCat
-        ? `\n💡 Ho capito: *${suggestedCat.name}*. Giusto?`
-        : '\n\nScegli la categoria:';
-
-      await ctx.reply(
-        `${sign}${formatCurrency(parsed.amount)}\n📝 ${parsed.description}${suggestionHint}`,
-        { reply_markup: keyboard, parse_mode: 'Markdown' },
-      );
     } catch (error) {
       logger.error('Bot text handler error', { error: String(error) });
       await ctx.reply('❌ Errore. Riprova.');
