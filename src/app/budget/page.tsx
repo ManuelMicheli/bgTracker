@@ -3,14 +3,17 @@ import { Card, CardTitle } from '@/components/ui/card';
 import { BudgetList } from '@/components/budget/budget-list';
 import { AddBudgetForm } from '@/components/budget/add-budget-form';
 import { formatCurrency } from '@/lib/utils';
+import { requireAuth } from '@/lib/auth';
 import * as budgetService from '@/lib/services/budget.service';
 import * as categoryService from '@/lib/services/category.service';
 
 export const dynamic = 'force-dynamic';
 
 export default async function BudgetPage() {
+  const user = await requireAuth();
+  
   const [budgets, categories] = await Promise.all([
-    budgetService.getBudgetsWithSpent(),
+    budgetService.getBudgetsWithSpent(user.id),
     categoryService.getExpenseCategories(),
   ]);
 

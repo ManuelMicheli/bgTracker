@@ -1,52 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 import { handleApiError } from '@/lib/utils';
 import { updateTransactionSchema } from '@/lib/validators/transaction';
 import * as transactionService from '@/lib/services/transaction.service';
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const transaction = await transactionService.getTransactionById(id);
-
-    if (!transaction) {
-      return NextResponse.json(
-        { error: { message: 'Transazione non trovata', code: 'NOT_FOUND' } },
-        { status: 404 },
-      );
-    }
-
-    return NextResponse.json({ data: transaction });
-  } catch (error) {
-    return handleApiError(error);
-  }
-}
-
-export async function PATCH(
+// GET /api/transactions/[id]
+export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await requireAuth();
     const { id } = await params;
-    const body = await request.json();
-    const validated = updateTransactionSchema.parse(body);
-    const transaction = await transactionService.updateTransaction(id, validated);
+    const transaction = await transactionService.getTransactionById(id, user.id);
+
+    if (!transaction) {
+      return NextResponse.json({ error: 'Transazione non trovata' }, { status: 404 });
+    }
 
     return NextResponse.json({ data: transaction });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+    }
     return handleApiError(error);
   }
 }
 
-export async function DELETE(
-  _request: NextRequest,
+// PUT /api/transactions/[id]
+export async function PUT(
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await requireAuth();
     const { id } = await params;
-    await transactionService.deleteTransaction(id);
+    const body = await request.json();
+    const validated = updateTransactionSchema.parse(body);
+    const transaction = await transactionService.updateTransaction(id, user.id, validated);
 
-    return NextResponse.json({ data: { deleted: true } });
+    return NextResponse.json({ data: transaction });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+    }
+    return handleApiError(error);
+  }
+}
+
+// DELETE /api/transactions/[id]
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const user = await requireAuth();
+    const { id } = await params;
+    await transactionService.deleteTransaction(id, user.id);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+    }
     return handleApiError(error);
   }
 }

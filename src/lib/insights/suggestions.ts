@@ -3,8 +3,6 @@ import { startOfMonth, endOfMonth } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
 import type { SpendingAnalysis } from './analyzer';
 
-const DEFAULT_USER_ID = 'default-user';
-
 export type SuggestionSeverity = 'info' | 'warning' | 'danger' | 'success';
 
 export interface Suggestion {
@@ -15,13 +13,15 @@ export interface Suggestion {
   severity: SuggestionSeverity;
 }
 
-export async function generateSuggestions(analysis: SpendingAnalysis): Promise<Suggestion[]> {
+export async function generateSuggestions(analysis: SpendingAnalysis, userId?: string): Promise<Suggestion[]> {
   const suggestions: Suggestion[] = [];
   const { overview, byCategory, topExpenseCategory, fastestGrowing } = analysis;
 
   // 1. Budget overruns
-  const budgetSuggestions = await checkBudgetOverruns();
-  suggestions.push(...budgetSuggestions);
+  if (userId) {
+    const budgetSuggestions = await checkBudgetOverruns(userId);
+    suggestions.push(...budgetSuggestions);
+  }
 
   // 2. Expense trend vs previous month
   if (overview.expenseChangePercent > 15 && overview.previous.totalExpenses > 0) {
@@ -134,7 +134,7 @@ export async function generateSuggestions(analysis: SpendingAnalysis): Promise<S
   return suggestions;
 }
 
-async function checkBudgetOverruns(): Promise<Suggestion[]> {
+async function checkBudgetOverruns(userId: string): Promise<Suggestion[]> {
   const suggestions: Suggestion[] = [];
   const now = new Date();
   const monthStart = startOfMonth(now);
@@ -143,7 +143,7 @@ async function checkBudgetOverruns(): Promise<Suggestion[]> {
   const year = now.getFullYear();
 
   const budgets = await prisma.budget.findMany({
-    where: { userId: DEFAULT_USER_ID, year, month },
+    where: { userId, year, month },
     include: { category: true },
   });
 
@@ -152,7 +152,7 @@ async function checkBudgetOverruns(): Promise<Suggestion[]> {
   const expenses = await prisma.transaction.groupBy({
     by: ['categoryId'],
     where: {
-      userId: DEFAULT_USER_ID,
+      userId,
       type: 'expense',
       date: { gte: monthStart, lte: monthEnd },
     },

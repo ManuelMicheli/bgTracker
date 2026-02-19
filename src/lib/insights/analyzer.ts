@@ -2,8 +2,6 @@ import { prisma } from '@/lib/prisma';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import { it } from 'date-fns/locale';
 
-const DEFAULT_USER_ID = 'default-user';
-
 export interface CategorySpending {
   categoryId: string;
   categoryName: string;
@@ -41,7 +39,7 @@ export interface SpendingAnalysis {
   projectedMonthlyExpense: number;
 }
 
-export async function analyzeSpending(date: Date = new Date()): Promise<SpendingAnalysis> {
+export async function analyzeSpending(userId: string, date: Date = new Date()): Promise<SpendingAnalysis> {
   const now = date;
   const monthStart = startOfMonth(now);
   const monthEnd = endOfMonth(now);
@@ -57,7 +55,7 @@ export async function analyzeSpending(date: Date = new Date()): Promise<Spending
       prisma.transaction.groupBy({
         by: ['categoryId'],
         where: {
-          userId: DEFAULT_USER_ID,
+          userId,
           type: 'expense',
           date: { gte: monthStart, lte: monthEnd },
         },
@@ -66,7 +64,7 @@ export async function analyzeSpending(date: Date = new Date()): Promise<Spending
       prisma.transaction.groupBy({
         by: ['categoryId'],
         where: {
-          userId: DEFAULT_USER_ID,
+          userId,
           type: 'expense',
           date: { gte: prevStart, lte: prevEnd },
         },
@@ -74,7 +72,7 @@ export async function analyzeSpending(date: Date = new Date()): Promise<Spending
       }),
       prisma.transaction.aggregate({
         where: {
-          userId: DEFAULT_USER_ID,
+          userId,
           type: 'income',
           date: { gte: monthStart, lte: monthEnd },
         },
@@ -82,7 +80,7 @@ export async function analyzeSpending(date: Date = new Date()): Promise<Spending
       }),
       prisma.transaction.aggregate({
         where: {
-          userId: DEFAULT_USER_ID,
+          userId,
           type: 'income',
           date: { gte: prevStart, lte: prevEnd },
         },

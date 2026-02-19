@@ -1,23 +1,24 @@
 import { NextResponse } from 'next/server';
-import { handleApiError } from '@/lib/utils';
+import { requireAuth } from '@/lib/auth';
 import * as transactionService from '@/lib/services/transaction.service';
 
 export async function GET() {
   try {
-    const [monthly, byCategory, recent] = await Promise.all([
-      transactionService.getMonthlyStats(),
-      transactionService.getExpensesByCategory(),
-      transactionService.getRecentTransactions(),
-    ]);
+    const user = await requireAuth();
+    const stats = await transactionService.getMonthlyStats(user.id);
+    const byCategory = await transactionService.getExpensesByCategory(user.id);
 
     return NextResponse.json({
       data: {
-        monthly,
+        ...stats,
         byCategory,
-        recent,
       },
     });
   } catch (error) {
-    return handleApiError(error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+    }
+    console.error('Error fetching stats:', error);
+    return NextResponse.json({ error: 'Errore interno' }, { status: 500 });
   }
 }

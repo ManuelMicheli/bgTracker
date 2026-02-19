@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS, APP_NAME } from '@/lib/constants';
 import { useUiStore } from '@/stores/ui-store';
+import { UserMenu } from '@/components/auth/user-menu';
 
 const icons: Record<string, string> = {
   LayoutDashboard: '📊',
@@ -56,6 +57,11 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* User Menu */}
+      <div className="border-t border-white/10 p-3">
+        <UserMenu />
+      </div>
     </aside>
   );
 }

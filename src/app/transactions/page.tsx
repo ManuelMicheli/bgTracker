@@ -2,6 +2,7 @@ import { Header } from '@/components/layout/header';
 import { Card } from '@/components/ui/card';
 import { TransactionList } from '@/components/transactions/transaction-list';
 import { AddTransactionForm } from '@/components/transactions/add-transaction-form';
+import { requireAuth } from '@/lib/auth';
 import * as transactionService from '@/lib/services/transaction.service';
 import * as categoryService from '@/lib/services/category.service';
 
@@ -12,11 +13,12 @@ export default async function TransactionsPage({
 }: {
   searchParams: Promise<{ page?: string; type?: string; categoryId?: string }>;
 }) {
+  const user = await requireAuth();
   const params = await searchParams;
   const page = parseInt(params.page ?? '1', 10);
 
   const [result, categories] = await Promise.all([
-    transactionService.getTransactions({
+    transactionService.getTransactions(user.id, {
       page,
       pageSize: 15,
       type: params.type as 'expense' | 'income' | undefined,

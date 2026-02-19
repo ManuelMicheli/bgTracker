@@ -3,12 +3,14 @@ import { Card, CardTitle } from '@/components/ui/card';
 import { SuggestionCard } from '@/components/insights/suggestion-card';
 import { CategoryComparison } from '@/components/insights/category-comparison';
 import { formatCurrency } from '@/lib/utils';
+import { requireAuth } from '@/lib/auth';
 import * as insightService from '@/lib/services/insight.service';
 
 export const dynamic = 'force-dynamic';
 
 export default async function InsightsPage() {
-  const { analysis, suggestions } = await insightService.getInsights();
+  const user = await requireAuth();
+  const { analysis, suggestions } = await insightService.getInsights(user.id);
 
   const { overview } = analysis;
 

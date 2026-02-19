@@ -1,40 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 import { handleApiError } from '@/lib/utils';
-import { updateBudgetSchema } from '@/lib/validators/budget';
 import * as budgetService from '@/lib/services/budget.service';
 
-export async function PATCH(
+// PUT /api/budgets/[id]
+export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await requireAuth();
     const { id } = await params;
     const body = await request.json();
-    const validated = updateBudgetSchema.parse(body);
+    const { amount } = body;
 
-    if (validated.amount === undefined) {
-      return NextResponse.json(
-        { error: { message: 'Importo richiesto', code: 'VALIDATION_ERROR' } },
-        { status: 400 },
-      );
+    if (typeof amount !== 'number' || amount <= 0) {
+      return NextResponse.json({ error: 'Importo non valido' }, { status: 400 });
     }
 
-    const budget = await budgetService.updateBudget(id, validated.amount);
+    const budget = await budgetService.updateBudget(id, user.id, amount);
     return NextResponse.json({ data: budget });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+    }
     return handleApiError(error);
   }
 }
 
+// DELETE /api/budgets/[id]
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await requireAuth();
     const { id } = await params;
-    await budgetService.deleteBudget(id);
-    return NextResponse.json({ data: { deleted: true } });
+    await budgetService.deleteBudget(id, user.id);
+
+    return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+    }
     return handleApiError(error);
   }
 }

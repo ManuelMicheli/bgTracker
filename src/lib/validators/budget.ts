@@ -20,5 +20,11 @@ export const updateBudgetSchema = z.object({
   amount: z.number().positive("L'importo deve essere positivo").optional(),
 });
 
+export const budgetFiltersSchema = z.object({
+  year: z.coerce.number().int().min(2020).max(2100).optional(),
+  month: z.coerce.number().int().min(1).max(12).optional(),
+});
+
 export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
 export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
+export type BudgetFilters = z.infer<typeof budgetFiltersSchema>;

@@ -1,12 +1,21 @@
 import { NextResponse } from 'next/server';
-import { handleApiError } from '@/lib/utils';
+import { requireAuth } from '@/lib/auth';
 import * as transactionService from '@/lib/services/transaction.service';
 
 export async function DELETE() {
   try {
-    const result = await transactionService.deleteAllTransactions();
-    return NextResponse.json({ data: { deleted: result.count } });
+    const user = await requireAuth();
+    const result = await transactionService.deleteAllTransactions(user.id);
+
+    return NextResponse.json({ 
+      success: true, 
+      message: `${result.count} transazioni eliminate` 
+    });
   } catch (error) {
-    return handleApiError(error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+    }
+    console.error('Error resetting transactions:', error);
+    return NextResponse.json({ error: 'Errore interno' }, { status: 500 });
   }
 }

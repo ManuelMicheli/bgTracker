@@ -4,17 +4,20 @@ import { RecentTransactions } from '@/components/dashboard/recent-transactions';
 import { ExpensePie } from '@/components/charts/expense-pie';
 import { Card, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
+import { requireAuth } from '@/lib/auth';
 import * as transactionService from '@/lib/services/transaction.service';
 import * as budgetService from '@/lib/services/budget.service';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
+  const user = await requireAuth();
+  
   const [stats, byCategory, recent, totalBudget] = await Promise.all([
-    transactionService.getMonthlyStats(),
-    transactionService.getExpensesByCategory(),
-    transactionService.getRecentTransactions(5),
-    budgetService.getTotalBudget(),
+    transactionService.getMonthlyStats(user.id),
+    transactionService.getExpensesByCategory(user.id),
+    transactionService.getRecentTransactions(user.id, 5),
+    budgetService.getTotalBudget(user.id),
   ]);
 
   const { currentMonth, previousMonth } = stats;

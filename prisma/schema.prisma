@@ -8,13 +8,17 @@ datasource db {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  telegramId   String?       @unique
-  name         String        @default("Utente")
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  transactions Transaction[]
-  budgets      Budget[]
+  id            String              @id @default(cuid())
+  supabaseUid   String?             @unique
+  telegramId    String?             @unique
+  name          String              @default("Utente")
+  email         String?             @unique
+  avatarUrl     String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  transactions  Transaction[]
+  budgets       Budget[]
+  telegramLinks TelegramUserLink[]
 }
 
 model Category {
@@ -68,4 +72,23 @@ model Budget {
   @@unique([userId, categoryId, period, month, year])
   @@index([userId])
   @@index([year])
+}
+
+// Codici di verifica per collegare Telegram all'account
+model TelegramUserLink {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  telegramId  String
+  telegramUsername String?
+  userId      String?
+  status      String    @default("pending") // "pending" | "verified" | "expired"
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  verifiedAt  DateTime?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([code])
+  @@index([telegramId])
+  @@index([userId])
 }

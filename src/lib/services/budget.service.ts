@@ -2,12 +2,10 @@ import { prisma } from '@/lib/prisma';
 import { startOfMonth, endOfMonth } from 'date-fns';
 import type { CreateBudgetInput } from '@/lib/validators/budget';
 
-const DEFAULT_USER_ID = 'default-user';
-
-export async function getBudgets(year: number, month?: number) {
+export async function getBudgets(userId: string, year: number, month?: number) {
   return prisma.budget.findMany({
     where: {
-      userId: DEFAULT_USER_ID,
+      userId,
       year,
       ...(month !== undefined ? { month } : {}),
     },
@@ -18,7 +16,7 @@ export async function getBudgets(year: number, month?: number) {
   });
 }
 
-export async function getBudgetsWithSpent(date: Date = new Date()) {
+export async function getBudgetsWithSpent(userId: string, date: Date = new Date()) {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
   const monthStart = startOfMonth(date);
@@ -26,7 +24,7 @@ export async function getBudgetsWithSpent(date: Date = new Date()) {
 
   const budgets = await prisma.budget.findMany({
     where: {
-      userId: DEFAULT_USER_ID,
+      userId,
       year,
       month,
     },
@@ -38,7 +36,7 @@ export async function getBudgetsWithSpent(date: Date = new Date()) {
   const expenses = await prisma.transaction.groupBy({
     by: ['categoryId'],
     where: {
-      userId: DEFAULT_USER_ID,
+      userId,
       type: 'expense',
       date: { gte: monthStart, lte: monthEnd },
     },
@@ -58,13 +56,13 @@ export async function getBudgetsWithSpent(date: Date = new Date()) {
   });
 }
 
-export async function getTotalBudget(date: Date = new Date()) {
+export async function getTotalBudget(userId: string, date: Date = new Date()) {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
 
   const result = await prisma.budget.aggregate({
     where: {
-      userId: DEFAULT_USER_ID,
+      userId,
       year,
       month,
     },
@@ -74,14 +72,14 @@ export async function getTotalBudget(date: Date = new Date()) {
   return result._sum.amount ?? 0;
 }
 
-export async function createBudget(data: CreateBudgetInput) {
+export async function createBudget(userId: string, data: CreateBudgetInput) {
   return prisma.budget.create({
     data: {
       amount: data.amount,
       period: data.period,
       month: data.month,
       year: data.year,
-      userId: DEFAULT_USER_ID,
+      userId,
       categoryId: data.categoryId,
     },
     include: {
@@ -90,9 +88,9 @@ export async function createBudget(data: CreateBudgetInput) {
   });
 }
 
-export async function updateBudget(id: string, amount: number) {
+export async function updateBudget(id: string, userId: string, amount: number) {
   return prisma.budget.update({
-    where: { id },
+    where: { id, userId },
     data: { amount },
     include: {
       category: { select: { id: true, name: true, icon: true, color: true } },
@@ -100,6 +98,6 @@ export async function updateBudget(id: string, amount: number) {
   });
 }
 
-export async function deleteBudget(id: string) {
-  return prisma.budget.delete({ where: { id } });
+export async function deleteBudget(id: string, userId: string) {
+  return prisma.budget.delete({ where: { id, userId } });
 }

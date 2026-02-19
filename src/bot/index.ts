@@ -6,6 +6,7 @@ import { extractTransactionsFromPhoto } from './vision';
 import { extractTransactionsFromFile, SUPPORTED_EXTENSIONS } from './file-parser';
 import * as transactionService from '@/lib/services/transaction.service';
 import * as categoryService from '@/lib/services/category.service';
+import * as telegramLinkService from '@/lib/services/telegram-link.service';
 
 // Store batch IDs in memory (Telegram callback data has 64 byte limit)
 const batchStore = new Map<string, string[]>();
@@ -27,6 +28,8 @@ function createBot(token: string) {
         '💰 *Entrate:*\n' +
         '• "Mi sono arrivati 1800 di stipendio"\n' +
         '• "Ricevuto bonifico 500 euro"\n\n' +
+        '🔗 *Collega il tuo account:*\n' +
+        '/collega - Ottieni codice per collegare l\'account web\n\n' +
         '📊 *Comandi:*\n' +
         '/saldo - Riepilogo mese\n' +
         '/ultimi - Ultime transazioni\n' +
@@ -34,6 +37,46 @@ function createBot(token: string) {
         '/annulla - Elimina ultima',
       { parse_mode: 'Markdown' },
     );
+  });
+
+  // /collega - Generate verification code to link Telegram to web account
+  bot.command('collega', async (ctx) => {
+    try {
+      const telegramId = String(ctx.from?.id);
+      const telegramUsername = ctx.from?.username;
+
+      if (!telegramId) {
+        await ctx.reply('❌ Non riesco a identificarti. Riprova più tardi.');
+        return;
+      }
+
+      // Check if already linked
+      const existingCode = await telegramLinkService.getPendingCode(telegramId);
+      if (existingCode) {
+        await ctx.reply(
+          `🔗 *Hai già un codice attivo!*\n\n` +
+          `Il tuo codice è: *${existingCode}*\n\n` +
+          `Inseriscilo nella pagina Impostazioni del sito web per collegare il tuo account.\n` +
+          `⏰ Il codice scade tra 10 minuti.`,
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
+
+      const code = await telegramLinkService.generateVerificationCode(telegramId, telegramUsername);
+
+      await ctx.reply(
+        `🔗 *Collega il tuo account Telegram*\n\n` +
+        `Il tuo codice di verifica è:\n` +
+        `📝 *${code}*\n\n` +
+        `Vai su Impostazioni → Telegram sul sito web e inserisci questo codice per collegare il tuo account.\n\n` +
+        `⏰ Il codice scade tra 10 minuti.`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (error) {
+      logger.error('Bot /collega error', { error: String(error) });
+      await ctx.reply('❌ Errore nella generazione del codice. Riprova più tardi.');
+    }
   });
 
   bot.command('help', async (ctx) => {
@@ -45,6 +88,8 @@ function createBot(token: string) {
         '• "Caffè 1.50"\n' +
         '• "Mi è arrivato lo stipendio 1800"\n\n' +
         'Capisco la categoria automaticamente, e se sbaglio puoi correggerla con un tap.\n\n' +
+        '🔗 *Collega il tuo account:*\n' +
+        '/collega - Ottieni codice per collegare l\'account web\n\n' +
         '📊 *Comandi:*\n' +
         '/saldo - Riepilogo mensile\n' +
         '/ultimi - Ultime transazioni\n' +
@@ -57,7 +102,13 @@ function createBot(token: string) {
   // /saldo
   bot.command('saldo', async (ctx) => {
     try {
-      const stats = await transactionService.getMonthlyStats();
+      const telegramId = String(ctx.from?.id);
+      if (!telegramId) {
+        await ctx.reply('❌ Non riesco a identificarti.');
+        return;
+      }
+
+      const stats = await transactionService.getMonthlyStatsForTelegramUser(telegramId);
       const { currentMonth, previousMonth } = stats;
 
       const diff = currentMonth.expenses - previousMonth.expenses;
@@ -76,6 +127,17 @@ function createBot(token: string) {
         { parse_mode: 'Markdown' },
       );
     } catch (error) {
+      if (error instanceof Error && error.message === 'User not found') {
+        await ctx.reply(
+          '🔗 *Account non collegato*\n\n' +
+          'Per usare questa funzione, collega prima il tuo account Telegram:\n' +
+          '1. Vai su Impostazioni → Telegram sul sito web\n' +
+          '2. Invia /collega qui su Telegram\n' +
+          '3. Inserisci il codice sul sito',
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
       logger.error('Bot /saldo error', { error: String(error) });
       await ctx.reply('❌ Errore nel recupero del saldo.');
     }
@@ -84,7 +146,13 @@ function createBot(token: string) {
   // /ultimi
   bot.command('ultimi', async (ctx) => {
     try {
-      const transactions = await transactionService.getRecentTransactions(5);
+      const telegramId = String(ctx.from?.id);
+      if (!telegramId) {
+        await ctx.reply('❌ Non riesco a identificarti.');
+        return;
+      }
+
+      const transactions = await transactionService.getRecentTransactionsForTelegramUser(telegramId, 5);
 
       if (transactions.length === 0) {
         await ctx.reply('📭 Nessuna transazione registrata.');
@@ -104,6 +172,15 @@ function createBot(token: string) {
         parse_mode: 'Markdown',
       });
     } catch (error) {
+      if (error instanceof Error && error.message === 'User not found') {
+        await ctx.reply(
+          '🔗 *Account non collegato*\n\n' +
+          'Collega il tuo account per vedere le transazioni.\n' +
+          'Invia /collega per iniziare.',
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
       logger.error('Bot /ultimi error', { error: String(error) });
       await ctx.reply('❌ Errore nel recupero delle transazioni.');
     }
@@ -126,7 +203,13 @@ function createBot(token: string) {
   // /annulla
   bot.command('annulla', async (ctx) => {
     try {
-      const recent = await transactionService.getRecentTransactions(1);
+      const telegramId = String(ctx.from?.id);
+      if (!telegramId) {
+        await ctx.reply('❌ Non riesco a identificarti.');
+        return;
+      }
+
+      const recent = await transactionService.getRecentTransactionsForTelegramUser(telegramId, 1);
       if (recent.length === 0) {
         await ctx.reply('📭 Nessuna transazione da annullare.');
         return;
@@ -144,6 +227,10 @@ function createBot(token: string) {
         { reply_markup: keyboard },
       );
     } catch (error) {
+      if (error instanceof Error && error.message === 'User not found') {
+        await ctx.reply('🔗 Account non collegato. Invia /collega per iniziare.');
+        return;
+      }
       logger.error('Bot /annulla error', { error: String(error) });
       await ctx.reply('❌ Errore.');
     }
@@ -151,8 +238,14 @@ function createBot(token: string) {
 
   // /azzera
   bot.command('azzera', async (ctx) => {
+    const telegramId = String(ctx.from?.id);
+    if (!telegramId) {
+      await ctx.reply('❌ Non riesco a identificarti.');
+      return;
+    }
+
     const keyboard = new InlineKeyboard()
-      .text('✅ Sì, cancella tutto', 'confirm-reset')
+      .text('✅ Sì, cancella tutto', `confirm-reset:${telegramId}`)
       .text('❌ No', 'cancel');
 
     await ctx.reply(
@@ -162,12 +255,18 @@ function createBot(token: string) {
   });
 
   // Callback: confirm reset
-  bot.callbackQuery('confirm-reset', async (ctx) => {
+  bot.callbackQuery(/^confirm-reset:(.+)$/, async (ctx) => {
     try {
-      const result = await transactionService.deleteAllTransactions();
+      const telegramId = ctx.match[1];
+      const result = await transactionService.deleteAllTransactionsForTelegramUser(telegramId);
       await ctx.editMessageText(`🗑️ Fatto. ${result.count} transazioni eliminate.`);
       await ctx.answerCallbackQuery();
     } catch (error) {
+      if (error instanceof Error && error.message === 'User not found') {
+        await ctx.editMessageText('🔗 Account non collegato. Invia /collega per iniziare.');
+        await ctx.answerCallbackQuery();
+        return;
+      }
       logger.error('Bot reset error', { error: String(error) });
       await ctx.answerCallbackQuery({ text: '❌ Errore' });
     }
@@ -176,11 +275,21 @@ function createBot(token: string) {
   // Callback: delete confirmation
   bot.callbackQuery(/^delete:(.+)$/, async (ctx) => {
     try {
+      const telegramId = String(ctx.from?.id);
+      if (!telegramId) {
+        await ctx.answerCallbackQuery({ text: '❌ Errore di identificazione' });
+        return;
+      }
+
       const id = ctx.match[1];
-      await transactionService.deleteTransaction(id);
+      await transactionService.deleteTransactionByIdForTelegramUser(id, telegramId);
       await ctx.editMessageText('✅ Transazione eliminata.');
       await ctx.answerCallbackQuery();
     } catch (error) {
+      if (error instanceof Error && error.message === 'User not found') {
+        await ctx.answerCallbackQuery({ text: '❌ Account non collegato' });
+        return;
+      }
       logger.error('Bot delete callback error', { error: String(error) });
       await ctx.answerCallbackQuery({ text: '❌ Errore' });
     }
@@ -195,6 +304,12 @@ function createBot(token: string) {
   // Callback: user picks category manually
   bot.callbackQuery(/^save:(.+):(.+):(.+)$/, async (ctx) => {
     try {
+      const telegramId = String(ctx.from?.id);
+      if (!telegramId) {
+        await ctx.answerCallbackQuery({ text: '❌ Errore di identificazione' });
+        return;
+      }
+
       const [, amountStr, categoryId, type] = ctx.match;
       const amount = parseFloat(amountStr);
 
@@ -202,7 +317,7 @@ function createBot(token: string) {
       const category = await categoryService.getCategoryById(categoryId);
       const description = category?.name ?? 'Transazione';
 
-      const transaction = await transactionService.createTransaction({
+      const transaction = await transactionService.createTransactionForTelegramUser(telegramId, {
         amount,
         description,
         type: type as 'expense' | 'income',
@@ -216,6 +331,10 @@ function createBot(token: string) {
       );
       await ctx.answerCallbackQuery();
     } catch (error) {
+      if (error instanceof Error && error.message === 'User not found') {
+        await ctx.answerCallbackQuery({ text: '❌ Account non collegato' });
+        return;
+      }
       logger.error('Bot save callback error', { error: String(error) });
       await ctx.answerCallbackQuery({ text: '❌ Errore nel salvataggio' });
     }
@@ -252,6 +371,12 @@ function createBot(token: string) {
   // Callback: batch delete (annulla tutte le transazioni da foto)
   bot.callbackQuery(/^batch-del:(.+)$/, async (ctx) => {
     try {
+      const telegramId = String(ctx.from?.id);
+      if (!telegramId) {
+        await ctx.answerCallbackQuery({ text: '❌ Errore di identificazione' });
+        return;
+      }
+
       const batchId = ctx.match[1];
       const ids = batchStore.get(batchId);
       if (!ids || ids.length === 0) {
@@ -259,13 +384,17 @@ function createBot(token: string) {
         await ctx.answerCallbackQuery();
         return;
       }
-      for (const id of ids) {
-        await transactionService.deleteTransaction(id);
-      }
+
+      await transactionService.deleteTransactionsByIdsForTelegramUser(ids, telegramId);
       batchStore.delete(batchId);
       await ctx.editMessageText(`🗑️ ${ids.length} transazioni eliminate.`);
       await ctx.answerCallbackQuery();
     } catch (error) {
+      if (error instanceof Error && error.message === 'User not found') {
+        await ctx.editMessageText('🔗 Account non collegato. Invia /collega per iniziare.');
+        await ctx.answerCallbackQuery();
+        return;
+      }
       logger.error('Bot batch-delete error', { error: String(error) });
       await ctx.answerCallbackQuery({ text: '❌ Errore' });
     }
@@ -275,6 +404,12 @@ function createBot(token: string) {
   bot.on('message:photo', async (ctx) => {
     if (!process.env.OPENAI_API_KEY) {
       await ctx.reply('❌ OPENAI_API_KEY non configurata. Aggiungi la chiave nel file .env');
+      return;
+    }
+
+    const telegramId = String(ctx.from?.id);
+    if (!telegramId) {
+      await ctx.reply('❌ Non riesco a identificarti.');
       return;
     }
 
@@ -316,7 +451,7 @@ function createBot(token: string) {
           : allCategories.find((c) => c.name === 'Altro');
         const cat = matchedCat ?? allCategories[0];
 
-        const transaction = await transactionService.createTransaction({
+        const transaction = await transactionService.createTransactionForTelegramUser(telegramId, {
           amount: item.amount,
           description: cat.name,
           type: item.type,
@@ -344,6 +479,14 @@ function createBot(token: string) {
         { reply_markup: keyboard },
       );
     } catch (error) {
+      if (error instanceof Error && error.message === 'User not found') {
+        await ctx.api.editMessageText(
+          ctx.chat.id,
+          processing.message_id,
+          '🔗 Account non collegato. Invia /collega per iniziare.',
+        );
+        return;
+      }
       logger.error('Bot photo handler error', { error: String(error) });
       await ctx.api.editMessageText(
         ctx.chat.id,
@@ -368,6 +511,12 @@ function createBot(token: string) {
 
     if (!process.env.OPENAI_API_KEY) {
       await ctx.reply('❌ OPENAI_API_KEY non configurata.');
+      return;
+    }
+
+    const telegramId = String(ctx.from?.id);
+    if (!telegramId) {
+      await ctx.reply('❌ Non riesco a identificarti.');
       return;
     }
 
@@ -402,7 +551,7 @@ function createBot(token: string) {
           : allCategories.find((c) => c.name === 'Altro');
         const cat = matchedCat ?? allCategories[0];
 
-        const transaction = await transactionService.createTransaction({
+        const transaction = await transactionService.createTransactionForTelegramUser(telegramId, {
           amount: item.amount,
           description: cat.name,
           type: item.type,
@@ -430,6 +579,14 @@ function createBot(token: string) {
         { reply_markup: keyboard },
       );
     } catch (error) {
+      if (error instanceof Error && error.message === 'User not found') {
+        await ctx.api.editMessageText(
+          ctx.chat.id,
+          processing.message_id,
+          '🔗 Account non collegato. Invia /collega per iniziare.',
+        );
+        return;
+      }
       logger.error('Bot document handler error', { error: String(error) });
       await ctx.api.editMessageText(
         ctx.chat.id,
@@ -443,6 +600,12 @@ function createBot(token: string) {
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text.trim();
     if (text.startsWith('/')) return;
+
+    const telegramId = String(ctx.from?.id);
+    if (!telegramId) {
+      await ctx.reply('❌ Non riesco a identificarti.');
+      return;
+    }
 
     const parsed = parseMessage(text);
 
@@ -470,7 +633,7 @@ function createBot(token: string) {
 
       if (suggestedCat) {
         // Auto-save: category detected, use category name as description
-        const transaction = await transactionService.createTransaction({
+        const transaction = await transactionService.createTransactionForTelegramUser(telegramId, {
           amount: parsed.amount,
           description: suggestedCat.name,
           type: parsed.type,
@@ -503,6 +666,17 @@ function createBot(token: string) {
         );
       }
     } catch (error) {
+      if (error instanceof Error && error.message === 'User not found') {
+        await ctx.reply(
+          '🔗 *Account non collegato*\n\n' +
+          'Per registrare transazioni, collega prima il tuo account:\n' +
+          '1. Vai su Impostazioni → Telegram sul sito web\n' +
+          '2. Invia /collega qui su Telegram\n' +
+          '3. Inserisci il codice sul sito',
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
       logger.error('Bot text handler error', { error: String(error) });
       await ctx.reply('❌ Errore. Riprova.');
     }

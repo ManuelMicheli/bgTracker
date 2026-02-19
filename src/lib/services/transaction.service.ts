@@ -2,15 +2,14 @@ import { prisma } from '@/lib/prisma';
 import type { CreateTransactionInput, TransactionFilters } from '@/lib/validators/transaction';
 import { startOfMonth, endOfMonth, subMonths } from 'date-fns';
 
-const DEFAULT_USER_ID = 'default-user';
 const DEFAULT_PAGE_SIZE = 20;
 
-export async function getTransactions(filters: TransactionFilters = {}) {
+export async function getTransactions(userId: string, filters: TransactionFilters = {}) {
   const page = filters.page ?? 1;
   const pageSize = filters.pageSize ?? DEFAULT_PAGE_SIZE;
   const skip = (page - 1) * pageSize;
 
-  const where: Record<string, unknown> = { userId: DEFAULT_USER_ID };
+  const where: Record<string, unknown> = { userId };
 
   if (filters.type) where.type = filters.type;
   if (filters.categoryId) where.categoryId = filters.categoryId;
@@ -37,7 +36,16 @@ export async function getTransactions(filters: TransactionFilters = {}) {
   return { transactions, total, page, pageSize };
 }
 
-export async function getTransactionById(id: string) {
+export async function getTransactionById(id: string, userId?: string) {
+  if (userId) {
+    return prisma.transaction.findFirst({
+      where: { id, userId },
+      include: {
+        category: { select: { id: true, name: true, icon: true, color: true } },
+      },
+    });
+  }
+
   return prisma.transaction.findUnique({
     where: { id },
     include: {
@@ -46,7 +54,7 @@ export async function getTransactionById(id: string) {
   });
 }
 
-export async function createTransaction(data: CreateTransactionInput) {
+export async function createTransaction(userId: string, data: CreateTransactionInput) {
   return prisma.transaction.create({
     data: {
       amount: data.amount,
@@ -55,7 +63,7 @@ export async function createTransaction(data: CreateTransactionInput) {
       type: data.type ?? 'expense',
       source: data.source ?? 'manual',
       notes: data.notes,
-      userId: DEFAULT_USER_ID,
+      userId,
       categoryId: data.categoryId,
     },
     include: {
@@ -64,9 +72,9 @@ export async function createTransaction(data: CreateTransactionInput) {
   });
 }
 
-export async function updateTransaction(id: string, data: Partial<CreateTransactionInput>) {
+export async function updateTransaction(id: string, userId: string, data: Partial<CreateTransactionInput>) {
   return prisma.transaction.update({
-    where: { id },
+    where: { id, userId },
     data: {
       ...(data.amount !== undefined && { amount: data.amount }),
       ...(data.description !== undefined && { description: data.description }),
@@ -81,15 +89,48 @@ export async function updateTransaction(id: string, data: Partial<CreateTransact
   });
 }
 
-export async function deleteTransaction(id: string) {
-  return prisma.transaction.delete({ where: { id } });
+export async function deleteTransaction(id: string, userId: string) {
+  return prisma.transaction.delete({ where: { id, userId } });
 }
 
-export async function deleteAllTransactions() {
-  return prisma.transaction.deleteMany();
+// For Telegram bot - delete transaction by ID (validates ownership via user's telegramId)
+export async function deleteTransactionByIdForTelegramUser(id: string, telegramId: string) {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  return prisma.transaction.delete({ 
+    where: { id, userId: user.id } 
+  });
 }
 
-export async function getMonthlyStats(date: Date = new Date()) {
+export async function deleteAllTransactions(userId: string) {
+  return prisma.transaction.deleteMany({ where: { userId } });
+}
+
+// For Telegram bot - delete transactions by IDs (validates ownership via user's telegramId)
+export async function deleteTransactionsByIdsForTelegramUser(ids: string[], telegramId: string) {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  return prisma.transaction.deleteMany({ 
+    where: { 
+      id: { in: ids },
+      userId: user.id 
+    } 
+  });
+}
+
+export async function getMonthlyStats(userId: string, date: Date = new Date()) {
   const monthStart = startOfMonth(date);
   const monthEnd = endOfMonth(date);
   const prevMonthStart = startOfMonth(subMonths(date, 1));
@@ -98,7 +139,7 @@ export async function getMonthlyStats(date: Date = new Date()) {
   const [currentExpenses, currentIncome, prevExpenses, prevIncome] = await Promise.all([
     prisma.transaction.aggregate({
       where: {
-        userId: DEFAULT_USER_ID,
+        userId,
         type: 'expense',
         date: { gte: monthStart, lte: monthEnd },
       },
@@ -106,7 +147,7 @@ export async function getMonthlyStats(date: Date = new Date()) {
     }),
     prisma.transaction.aggregate({
       where: {
-        userId: DEFAULT_USER_ID,
+        userId,
         type: 'income',
         date: { gte: monthStart, lte: monthEnd },
       },
@@ -114,7 +155,7 @@ export async function getMonthlyStats(date: Date = new Date()) {
     }),
     prisma.transaction.aggregate({
       where: {
-        userId: DEFAULT_USER_ID,
+        userId,
         type: 'expense',
         date: { gte: prevMonthStart, lte: prevMonthEnd },
       },
@@ -122,7 +163,7 @@ export async function getMonthlyStats(date: Date = new Date()) {
     }),
     prisma.transaction.aggregate({
       where: {
-        userId: DEFAULT_USER_ID,
+        userId,
         type: 'income',
         date: { gte: prevMonthStart, lte: prevMonthEnd },
       },
@@ -144,14 +185,14 @@ export async function getMonthlyStats(date: Date = new Date()) {
   };
 }
 
-export async function getExpensesByCategory(date: Date = new Date()) {
+export async function getExpensesByCategory(userId: string, date: Date = new Date()) {
   const monthStart = startOfMonth(date);
   const monthEnd = endOfMonth(date);
 
   const expenses = await prisma.transaction.groupBy({
     by: ['categoryId'],
     where: {
-      userId: DEFAULT_USER_ID,
+      userId,
       type: 'expense',
       date: { gte: monthStart, lte: monthEnd },
     },
@@ -173,13 +214,74 @@ export async function getExpensesByCategory(date: Date = new Date()) {
   }));
 }
 
-export async function getRecentTransactions(limit = 5) {
+export async function getRecentTransactions(userId: string, limit = 5) {
   return prisma.transaction.findMany({
-    where: { userId: DEFAULT_USER_ID },
+    where: { userId },
     include: {
       category: { select: { id: true, name: true, icon: true, color: true } },
     },
     orderBy: { date: 'desc' },
     take: limit,
   });
+}
+
+// For Telegram bot - get user by telegram ID
+export async function getTransactionsByTelegramId(telegramId: string, filters: TransactionFilters = {}) {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  return getTransactions(user.id, filters);
+}
+
+export async function createTransactionForTelegramUser(telegramId: string, data: CreateTransactionInput) {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  return createTransaction(user.id, data);
+}
+
+export async function getMonthlyStatsForTelegramUser(telegramId: string, date?: Date) {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  return getMonthlyStats(user.id, date);
+}
+
+export async function getRecentTransactionsForTelegramUser(telegramId: string, limit = 5) {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  return getRecentTransactions(user.id, limit);
+}
+
+export async function deleteAllTransactionsForTelegramUser(telegramId: string) {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  return deleteAllTransactions(user.id);
 }
