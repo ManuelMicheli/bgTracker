@@ -83,6 +83,10 @@ export default function RegisterPage() {
           errorMessage = 'Inserisci un\'email valida.';
         } else if (authError.message.includes('password')) {
           errorMessage = 'La password non soddisfa i requisiti di sicurezza.';
+        } else if (authError.message.includes('rate limit') || authError.message.includes('Email rate limit')) {
+          errorMessage = 'Troppi tentativi di registrazione. Riprova tra un\'ora o contattaci se il problema persiste.';
+        } else if (authError.message.includes('For security purposes')) {
+          errorMessage = 'Troppi tentativi. Attendi qualche minuto prima di riprovare.';
         }
         
         toast.error(errorMessage);
