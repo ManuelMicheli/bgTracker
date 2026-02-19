@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Sidebar } from './sidebar';
 import { MobileNav } from './mobile-nav';
 
-const AUTH_ROUTES = ['/login', '/register', '/auth'];
+const AUTH_ROUTES = ['/login'];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { sidebarOpen, isMobile, setMobile, setSidebarOpen } = useUiStore();

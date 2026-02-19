@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,12 +19,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     const error = searchParams.get('error');
-    const confirmed = searchParams.get('confirmed');
     if (error === 'auth_callback_failed') {
-      toast.error('Errore nella conferma email. Riprova o richiedi un nuovo link.');
-    }
-    if (confirmed === 'true') {
-      toast.success('Email confermata! Ora puoi accedere.');
+      toast.error('Errore di autenticazione. Riprova.');
     }
   }, [searchParams]);
 
@@ -154,12 +149,6 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Accesso in corso...' : 'Accedi'}
             </Button>
-            <p className="text-sm text-muted-foreground">
-              Non hai un account?{' '}
-              <Link href="/register" className="text-primary hover:underline">
-                Registrati
-              </Link>
-            </p>
           </CardFooter>
         </form>
       </Card>
