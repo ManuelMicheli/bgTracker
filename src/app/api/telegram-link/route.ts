@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { requireApiAuth } from '@/lib/auth';
 import * as telegramLinkService from '@/lib/services/telegram-link.service';
 import { z } from 'zod';
 
@@ -10,7 +10,9 @@ const verifyCodeSchema = z.object({
 // POST /api/telegram-link - Verify code and link Telegram
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await requireApiAuth();
+    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+
     const body = await request.json();
     const { code } = verifyCodeSchema.parse(body);
 
@@ -25,9 +27,6 @@ export async function POST(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Codice non valido', details: error.issues }, { status: 400 });
     }
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
-    }
     console.error('Error verifying code:', error);
     return NextResponse.json({ error: 'Errore interno del server' }, { status: 500 });
   }
@@ -36,14 +35,13 @@ export async function POST(request: NextRequest) {
 // GET /api/telegram-link - Get current Telegram link status
 export async function GET() {
   try {
-    const user = await requireAuth();
+    const user = await requireApiAuth();
+    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+
     const linkInfo = await telegramLinkService.getTelegramLinkInfo(user.id);
 
     return NextResponse.json({ data: linkInfo });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
-    }
     console.error('Error getting link info:', error);
     return NextResponse.json({ error: 'Errore interno del server' }, { status: 500 });
   }
@@ -52,14 +50,13 @@ export async function GET() {
 // DELETE /api/telegram-link - Unlink Telegram
 export async function DELETE() {
   try {
-    const user = await requireAuth();
+    const user = await requireApiAuth();
+    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+
     await telegramLinkService.unlinkTelegram(user.id);
 
     return NextResponse.json({ message: 'Account Telegram scollegato con successo' });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
-    }
     console.error('Error unlinking telegram:', error);
     return NextResponse.json({ error: 'Errore interno del server' }, { status: 500 });
   }

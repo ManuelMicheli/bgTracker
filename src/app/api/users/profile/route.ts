@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { requireApiAuth } from '@/lib/auth';
 import * as userService from '@/lib/services/user.service';
 import { z } from 'zod';
 
@@ -10,7 +10,9 @@ const updateProfileSchema = z.object({
 // PUT /api/users/profile - Update user profile
 export async function PUT(request: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await requireApiAuth();
+    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+
     const body = await request.json();
     const { name } = updateProfileSchema.parse(body);
 
@@ -21,9 +23,6 @@ export async function PUT(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Dati non validi', details: error.issues }, { status: 400 });
     }
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
-    }
     console.error('Error updating profile:', error);
     return NextResponse.json({ error: 'Errore interno del server' }, { status: 500 });
   }
@@ -32,12 +31,11 @@ export async function PUT(request: NextRequest) {
 // GET /api/users/profile - Get current user profile
 export async function GET() {
   try {
-    const user = await requireAuth();
+    const user = await requireApiAuth();
+    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+
     return NextResponse.json({ data: user });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
-    }
     console.error('Error getting profile:', error);
     return NextResponse.json({ error: 'Errore interno del server' }, { status: 500 });
   }

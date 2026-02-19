@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { requireApiAuth } from '@/lib/auth';
 import * as transactionService from '@/lib/services/transaction.service';
 
 export async function GET() {
   try {
-    const user = await requireAuth();
+    const user = await requireApiAuth();
+    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+
     const stats = await transactionService.getMonthlyStats(user.id);
     const byCategory = await transactionService.getExpensesByCategory(user.id);
 
@@ -15,9 +17,6 @@ export async function GET() {
       },
     });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
-    }
     console.error('Error fetching stats:', error);
     return NextResponse.json({ error: 'Errore interno' }, { status: 500 });
   }

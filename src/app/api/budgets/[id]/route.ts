@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { requireApiAuth } from '@/lib/auth';
 import { handleApiError } from '@/lib/utils';
 import * as budgetService from '@/lib/services/budget.service';
 
@@ -9,7 +9,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireApiAuth();
+    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+
     const { id } = await params;
     const body = await request.json();
     const { amount } = body;
@@ -21,9 +23,6 @@ export async function PUT(
     const budget = await budgetService.updateBudget(id, user.id, amount);
     return NextResponse.json({ data: budget });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
-    }
     return handleApiError(error);
   }
 }
@@ -34,15 +33,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireAuth();
+    const user = await requireApiAuth();
+    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
+
     const { id } = await params;
     await budgetService.deleteBudget(id, user.id);
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
-    }
     return handleApiError(error);
   }
 }
