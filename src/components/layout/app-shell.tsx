@@ -1,13 +1,19 @@
 'use client';
 
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useUiStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
 import { Sidebar } from './sidebar';
 import { MobileNav } from './mobile-nav';
 
+const AUTH_ROUTES = ['/login', '/register', '/auth'];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { sidebarOpen, isMobile, setMobile, setSidebarOpen } = useUiStore();
+  const pathname = usePathname();
+
+  const isAuthPage = AUTH_ROUTES.some((route) => pathname.startsWith(route));
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
@@ -16,7 +22,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       const mobile = e.matches;
       setMobile(mobile);
       if (!mobile) {
-        // On desktop, default sidebar open
         setSidebarOpen(true);
       } else {
         setSidebarOpen(false);
@@ -28,9 +33,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => mq.removeEventListener('change', handleChange);
   }, [setMobile, setSidebarOpen]);
 
+  if (isAuthPage) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="min-h-screen">
-      {/* Backdrop overlay on mobile when sidebar is open */}
       {isMobile && sidebarOpen && (
         <div
           className="fixed inset-0 z-30 bg-black/50 transition-opacity"

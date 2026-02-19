@@ -4,6 +4,7 @@ import { CategoryList } from '@/components/settings/category-list';
 import { AddCategoryForm } from '@/components/settings/add-category-form';
 import { TelegramConfig } from '@/components/settings/telegram-config';
 import { ResetData } from '@/components/settings/reset-data';
+import { requireAuth } from '@/lib/auth';
 import * as categoryService from '@/lib/services/category.service';
 
 export const dynamic = 'force-dynamic';
@@ -32,6 +33,8 @@ async function getTelegramInfo() {
 }
 
 export default async function SettingsPage() {
+  await requireAuth();
+
   const [categories, telegramInfo] = await Promise.all([
     categoryService.getAllCategories(),
     getTelegramInfo(),

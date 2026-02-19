@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -22,7 +22,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -70,6 +70,7 @@ export default function RegisterPage() {
           data: {
             name: name || 'Utente',
           },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 

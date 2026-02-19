@@ -36,7 +36,7 @@ export async function POST() {
     const testEmail = 'test@example.com';
     
     const { error } = await supabase.auth.resetPasswordForEmail(testEmail, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/callback`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/auth/callback`,
     });
     
     if (error) {

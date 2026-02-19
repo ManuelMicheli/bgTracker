@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,19 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const router = useRouter();
-  const supabase = createClient();
+  const searchParams = useSearchParams();
+  const supabase = useMemo(() => createClient(), []);
+
+  useEffect(() => {
+    const error = searchParams.get('error');
+    const confirmed = searchParams.get('confirmed');
+    if (error === 'auth_callback_failed') {
+      toast.error('Errore nella conferma email. Riprova o richiedi un nuovo link.');
+    }
+    if (confirmed === 'true') {
+      toast.success('Email confermata! Ora puoi accedere.');
+    }
+  }, [searchParams]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};

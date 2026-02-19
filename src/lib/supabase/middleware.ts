@@ -40,7 +40,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Protected routes - redirect to login if not authenticated
-  const protectedRoutes = ['/dashboard', '/transactions', '/budget', '/insights', '/settings'];
+  const protectedRoutes = ['/dashboard', '/transactions', '/budget', '/insights', '/settings', '/profile'];
   const isProtectedRoute = protectedRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route),
   );
@@ -52,6 +52,13 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redirect authenticated users away from auth pages
+  // Redirect root to dashboard (or login if not authenticated)
+  if (request.nextUrl.pathname === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? '/dashboard' : '/login';
+    return NextResponse.redirect(url);
+  }
+
   const authRoutes = ['/login', '/register'];
   const isAuthRoute = authRoutes.some((route) => request.nextUrl.pathname.startsWith(route));
 
