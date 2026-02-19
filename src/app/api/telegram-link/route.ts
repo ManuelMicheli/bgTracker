@@ -11,7 +11,6 @@ const verifyCodeSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     const body = await request.json();
     const { code } = verifyCodeSchema.parse(body);
@@ -36,7 +35,6 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     const linkInfo = await telegramLinkService.getTelegramLinkInfo(user.id);
 
@@ -51,7 +49,6 @@ export async function GET() {
 export async function DELETE() {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     await telegramLinkService.unlinkTelegram(user.id);
 

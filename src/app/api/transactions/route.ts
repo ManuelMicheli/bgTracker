@@ -8,7 +8,6 @@ import * as transactionService from '@/lib/services/transaction.service';
 export async function GET(request: NextRequest) {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
     const filters = transactionFiltersSchema.parse(Object.fromEntries(searchParams));
@@ -27,7 +26,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     const body = await request.json();
     const validated = createTransactionSchema.parse(body);

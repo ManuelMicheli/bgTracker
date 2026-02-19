@@ -10,7 +10,6 @@ export async function PUT(
 ) {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     const { id } = await params;
     const body = await request.json();
@@ -34,7 +33,6 @@ export async function DELETE(
 ) {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     const { id } = await params;
     await budgetService.deleteBudget(id, user.id);

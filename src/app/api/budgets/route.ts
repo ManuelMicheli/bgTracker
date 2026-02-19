@@ -8,7 +8,6 @@ import * as budgetService from '@/lib/services/budget.service';
 export async function GET(request: NextRequest) {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
     const filters = budgetFiltersSchema.parse(Object.fromEntries(searchParams));
@@ -33,7 +32,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     const body = await request.json();
     const validated = createBudgetSchema.parse(body);

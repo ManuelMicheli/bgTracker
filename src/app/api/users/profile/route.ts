@@ -11,7 +11,6 @@ const updateProfileSchema = z.object({
 export async function PUT(request: NextRequest) {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     const body = await request.json();
     const { name } = updateProfileSchema.parse(body);
@@ -32,7 +31,6 @@ export async function PUT(request: NextRequest) {
 export async function GET() {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     return NextResponse.json({ data: user });
   } catch (error) {

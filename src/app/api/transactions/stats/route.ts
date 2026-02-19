@@ -5,7 +5,6 @@ import * as transactionService from '@/lib/services/transaction.service';
 export async function GET() {
   try {
     const user = await requireApiAuth();
-    if (!user) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 });
 
     const stats = await transactionService.getMonthlyStats(user.id);
     const byCategory = await transactionService.getExpensesByCategory(user.id);

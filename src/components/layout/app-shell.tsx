@@ -1,19 +1,13 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
 import { useUiStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
 import { Sidebar } from './sidebar';
 import { MobileNav } from './mobile-nav';
 
-const AUTH_ROUTES = ['/login'];
-
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { sidebarOpen, isMobile, setMobile, setSidebarOpen } = useUiStore();
-  const pathname = usePathname();
-
-  const isAuthPage = AUTH_ROUTES.some((route) => pathname.startsWith(route));
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
@@ -32,10 +26,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     mq.addEventListener('change', handleChange);
     return () => mq.removeEventListener('change', handleChange);
   }, [setMobile, setSidebarOpen]);
-
-  if (isAuthPage) {
-    return <>{children}</>;
-  }
 
   return (
     <div className="min-h-screen">

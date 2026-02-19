@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 
@@ -12,16 +11,6 @@ export default function Error({
   reset: () => void;
 }) {
   const router = useRouter();
-
-  useEffect(() => {
-    if (error.message === 'Unauthorized') {
-      router.push('/login');
-    }
-  }, [error.message, router]);
-
-  if (error.message === 'Unauthorized') {
-    return null;
-  }
 
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 p-6">

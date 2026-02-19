@@ -1,51 +1,29 @@
-import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
-import { getUserBySupabaseUid, getOrCreateUser } from '@/lib/services/user.service';
+import { prisma } from '@/lib/prisma';
 
-export async function getCurrentUser() {
-  const supabase = await createClient();
-  const { data: { user: authUser }, error } = await supabase.auth.getUser();
-
-  if (error || !authUser) {
-    return null;
-  }
-
-  // Try to find user in our DB, auto-create if missing (handles edge cases
-  // where Supabase auth succeeded but DB record wasn't created)
-  let user = await getUserBySupabaseUid(authUser.id);
-
-  if (!user) {
-    try {
-      user = await getOrCreateUser(
-        authUser.id,
-        authUser.email || '',
-        authUser.user_metadata?.name || 'Utente',
-      );
-    } catch {
-      return null;
-    }
-  }
-
-  return user;
-}
+const DEFAULT_USER_EMAIL = 'default@bgtracking.local';
+const DEFAULT_USER_NAME = 'Utente';
 
 /**
- * For Server Components/Pages - redirects to /login if not authenticated
+ * Gets or creates the default single user for the app.
+ * Used by both server components and API routes.
  */
-export async function requireAuth() {
-  const user = await getCurrentUser();
+export async function getDefaultUser() {
+  let user = await prisma.user.findFirst({
+    where: { email: DEFAULT_USER_EMAIL },
+  });
 
   if (!user) {
-    redirect('/login');
+    user = await prisma.user.create({
+      data: {
+        email: DEFAULT_USER_EMAIL,
+        name: DEFAULT_USER_NAME,
+      },
+    });
   }
 
   return user;
 }
 
-/**
- * For API Routes - returns user or null (caller handles 401 response)
- */
-export async function requireApiAuth() {
-  const user = await getCurrentUser();
-  return user;
-}
+// Aliases for compatibility with existing page/API patterns
+export const requireAuth = getDefaultUser;
+export const requireApiAuth = getDefaultUser;
