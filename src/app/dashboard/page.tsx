@@ -47,7 +47,7 @@ export default async function DashboardPage() {
   return (
     <>
       <Header title="Dashboard" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 p-4 pb-20 md:space-y-6 md:p-6 md:pb-6">
         {/* Stat Cards */}
         <div className="grid gap-6 md:grid-cols-3">
           <StatCard

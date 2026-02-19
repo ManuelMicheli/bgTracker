@@ -6,7 +6,7 @@ export function Header({ title }: { title?: string }) {
   const { toggleSidebar } = useUiStore();
 
   return (
-    <header className="flex h-16 items-center gap-4 border-b border-border bg-card px-6">
+    <header className="flex h-14 items-center gap-3 border-b border-border bg-card px-4 md:h-16 md:gap-4 md:px-6">
       <button
         onClick={toggleSidebar}
         className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -28,7 +28,7 @@ export function Header({ title }: { title?: string }) {
           <line x1="3" y1="18" x2="21" y2="18" />
         </svg>
       </button>
-      {title && <h1 className="text-lg font-semibold">{title}</h1>}
+      {title && <h1 className="text-base font-semibold md:text-lg">{title}</h1>}
     </header>
   );
 }

@@ -15,7 +15,7 @@ export default async function InsightsPage() {
   return (
     <>
       <Header title="Insights" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 p-4 pb-20 md:space-y-6 md:p-6 md:pb-6">
         {/* Monthly overview comparison */}
         <div className="grid gap-4 md:grid-cols-2">
           <Card>

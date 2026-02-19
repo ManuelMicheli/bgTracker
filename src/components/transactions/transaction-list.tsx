@@ -43,9 +43,10 @@ export function TransactionList({ transactions, total, page, pageSize }: Transac
     <div>
       <TransactionTable transactions={transactions} onDelete={handleDelete} />
       {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Pagina {page} di {totalPages} ({total} transazioni)
+        <div className="mt-4 flex items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span className="shrink-0">
+            <span className="hidden sm:inline">Pagina </span>{page}/{totalPages}
+            <span className="hidden sm:inline"> ({total} transazioni)</span>
           </span>
           <div className="flex gap-2">
             {page > 1 && (
@@ -53,7 +54,8 @@ export function TransactionList({ transactions, total, page, pageSize }: Transac
                 onClick={() => router.push(`/transactions?page=${page - 1}`)}
                 className="rounded-lg border border-border px-3 py-1 hover:bg-muted"
               >
-                Precedente
+                <span className="sm:hidden">&larr;</span>
+                <span className="hidden sm:inline">Precedente</span>
               </button>
             )}
             {page < totalPages && (
@@ -61,7 +63,8 @@ export function TransactionList({ transactions, total, page, pageSize }: Transac
                 onClick={() => router.push(`/transactions?page=${page + 1}`)}
                 className="rounded-lg border border-border px-3 py-1 hover:bg-muted"
               >
-                Successiva
+                <span className="sm:hidden">&rarr;</span>
+                <span className="hidden sm:inline">Successiva</span>
               </button>
             )}
           </div>

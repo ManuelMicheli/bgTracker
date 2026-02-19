@@ -16,17 +16,21 @@ const icons: Record<string, string> = {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { sidebarOpen } = useUiStore();
+  const { sidebarOpen, isMobile, setSidebarOpen } = useUiStore();
 
   return (
     <aside
       className={cn(
         'fixed left-0 top-0 z-40 flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-all duration-300',
-        sidebarOpen ? 'w-64' : 'w-16',
+        isMobile
+          ? cn('w-64', sidebarOpen ? 'translate-x-0' : '-translate-x-full')
+          : cn(sidebarOpen ? 'w-64' : 'w-16'),
       )}
     >
       <div className="flex h-16 items-center border-b border-white/10 px-4">
-        <span className="text-xl font-bold">{sidebarOpen ? APP_NAME : 'BT'}</span>
+        <span className="text-xl font-bold">
+          {isMobile || sidebarOpen ? APP_NAME : 'BT'}
+        </span>
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
@@ -36,6 +40,9 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => {
+                if (isMobile) setSidebarOpen(false);
+              }}
               className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 isActive
@@ -44,7 +51,7 @@ export function Sidebar() {
               )}
             >
               <span className="text-lg">{icons[item.icon]}</span>
-              {sidebarOpen && <span>{item.label}</span>}
+              {(isMobile || sidebarOpen) && <span>{item.label}</span>}
             </Link>
           );
         })}

@@ -42,7 +42,7 @@ export default async function TransactionsPage({
   return (
     <>
       <Header title="Transazioni" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 p-4 pb-20 md:space-y-6 md:p-6 md:pb-6">
         <AddTransactionForm categories={plainCategories} />
         <Card>
           <TransactionList

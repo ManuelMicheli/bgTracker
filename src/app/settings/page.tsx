@@ -40,7 +40,7 @@ export default async function SettingsPage() {
   return (
     <>
       <Header title="Impostazioni" />
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 p-4 pb-20 md:space-y-6 md:p-6 md:pb-6">
         {/* Telegram */}
         <Card>
           <CardTitle>Telegram Bot</CardTitle>
