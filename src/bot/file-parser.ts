@@ -1,7 +1,5 @@
 import OpenAI from 'openai';
 import Papa from 'papaparse';
-import { PDFParse } from 'pdf-parse';
-import * as XLSX from 'xlsx';
 import { logger } from '@/lib/logger';
 import type { ExtractedTransaction } from './vision';
 
@@ -138,12 +136,14 @@ function parseCsvToText(buffer: Buffer): string {
 }
 
 async function parsePdfToText(buffer: Buffer): Promise<string> {
+  const { PDFParse } = await import('pdf-parse');
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
   const result = await parser.getText();
   return result.text ?? '';
 }
 
-function parseExcelToText(buffer: Buffer): string {
+async function parseExcelToText(buffer: Buffer): Promise<string> {
+  const XLSX = await import('xlsx');
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const lines: string[] = [];
 
@@ -178,7 +178,7 @@ export async function extractTransactionsFromFile(
         break;
       case 'xlsx':
       case 'xls':
-        textContent = parseExcelToText(buffer);
+        textContent = await parseExcelToText(buffer);
         break;
       default:
         // Try as plain text

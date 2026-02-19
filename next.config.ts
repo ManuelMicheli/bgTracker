@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  serverExternalPackages: ['xlsx', 'pdf-parse'],
 };
 
 export default nextConfig;
